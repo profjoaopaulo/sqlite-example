@@ -1,11 +1,114 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Text, View, Button, FlatList, TextInput, StyleSheet } from 'react-native';
+import * as SQLite from 'expo-sqlite'; //Importação da biblioteca SQLite
 
 export default function App() {
+  //Criando/abrindo a base de dados
+  const database = SQLite.openDatabaseSync('livros.db');
+
+  const [books, setBooks] = useState([]);
+  const [name, setName] = useState('');
+  const [editingBook, setEditingBook] = useState(null);
+  const [editedName, setEditedName] = useState('');
+
+  //Criação da tabela books
+  useEffect(() => {
+    database.execAsync(`
+      CREATE TABLE IF NOT EXISTS books(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL
+      )
+    `);
+    readBooks();
+  }, []);
+
+  //CRUD: READ
+  const readBooks = async () => {
+    const dbBooks = await database.getAllAsync("SELECT * FROM books");
+    setBooks(dbBooks);
+  };
+
+  //CRUD: CREATE
+  const addBook = async () => {
+    if (!name.trim()) {
+      return alert("Campo nome obrigatório!");
+    }
+
+    await database.runAsync("INSERT INTO books (name) VALUES (?)", name.trim());
+    setName('');
+    readBooks();
+  };
+
+  //CRUD: UPDATE
+  const updateBook = async () => {
+    if (!editedName.trim()) {
+      return alert("Campo nome obrigatório!");
+    }
+
+    await database.runAsync("UPDATE books SET name = ? WHERE id = ?", [editedName.trim(), editingBook.id]);
+    setEditingBook(null);
+    setEditedName('');
+    readBooks();
+  };
+
+  //CRUD: DELETE
+  const deleteBook = async (id) => {
+    await database.runAsync("DELETE FROM books WHERE id = ?", id);
+    readBooks();
+  };
+
+  const startEditing = (book) => {
+    setEditingBook(book);
+    setEditedName(book.name);
+  };
+
+  const cancelEditing = () => {
+    setEditingBook(null);
+    setEditedName('');
+  };
+
+
   return (
     <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
+      <Text style={styles.title}>Livros</Text>
+
+      <TextInput
+        placeholder="Nome do Livro"
+        onChangeText={setName}
+        value={name}
+        style={styles.input}
+      />
+
+      <Button title='Adicionar Livro' onPress={addBook} />
+
+      <FlatList
+        data={books}
+        keyExtractor={item => item.id.toString()}
+        renderItem={({ item }) => (
+          <View style={styles.bookItem}>
+            {editingBook && editingBook.id === item.id ? (
+              <View style={styles.editContainer}>
+                <TextInput
+                  value={editedName}
+                  onChangeText={setEditedName}
+                  style={styles.editInput}
+                />
+                <View style={{ flexDirection: 'row', }}>
+                  <Button title="Salvar" onPress={updateBook} />
+                  <Button title="Cancelar" onPress={cancelEditing} color="red" />
+                </View>
+              </View>
+            ) : (
+              <Text>{item.name}</Text>
+            )}
+
+            <View style={styles.buttonContainer}>
+              <Button title="Editar" onPress={() => startEditing(item)} />
+              <Button title="Excluir" onPress={() => deleteBook(item.id)} color="red" />
+            </View>
+          </View>
+        )}
+      />
     </View>
   );
 }
@@ -13,8 +116,40 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 20,
   },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  input: {
+    borderBottomWidth: 1,
+    marginBottom: 10,
+    padding: 5,
+  },
+  bookItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ccc",
+    paddingBottom: 10
+  },
+  editContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    flex: 1
+  },
+  editInput: {
+    flex: 1,
+    borderBottomWidth: 1,
+    marginRight: 5,
+    padding: 5
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    gap: 5
+  }
 });
